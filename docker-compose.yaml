@@ -23,7 +23,7 @@ services:
   postgres-init:
     image: postgres:16
     command: >
-      bash -c "sleep 5 && PGPASSWORD=watermelon psql -h postgresdb -U nayeon -d spotify-star-schema -f /docker-entrypoint-initdb.d/create_db.sql"
+      bash -c "sleep 5 && PGPASSWORD=${POSTGRES_PASSWORD} psql -h postgresdb -U ${POSTGRES_USER} -d ${POSTGRES_DB} -f /docker-entrypoint-initdb.d/create_db.sql"
     volumes:
       - ./sql/create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
     depends_on:
@@ -48,7 +48,16 @@ services:
     command: scheduler
     environment:
       AIRFLOW_EXECUTOR: LocalExecutor
+      SPOTIFY_REFRESH_TOKEN: ${SPOTIFY_REFRESH_TOKEN}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresdb/${AIRFLOW_DB_NAME}
+      POSTGRES_HOST: postgresdb
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+
     restart: always
     depends_on:
       - postgresdb
@@ -68,6 +77,9 @@ services:
     environment:
       AIRFLOW_EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresdb/${AIRFLOW_DB_NAME}
+      SPOTIFY_REFRESH_TOKEN: ${SPOTIFY_REFRESH_TOKEN}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
     ports:
       - "8080:8080"
     restart: always

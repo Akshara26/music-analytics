@@ -37,17 +37,13 @@ def token_from_authorization_code(authorization_code: str):
 
 
 def get_access_token():
-    """generates token if authorization code is present"""
-
-    existing_token = app_config.get_spotify_access_token()
-    if existing_token:
-        return existing_token
-
-    code = app_config.get_spotify_authorization_code()
-    if code:
-        access_token = token_from_authorization_code(authorization_code=code)
-        save_access_token(access_token)
-        return access_token
-    else:
-        logging.error("Authorization code is required")
-        raise AirflowException("Authorization code is required")
+    """Read access token from file written by authorize_user task"""
+    import os
+    token_path = "/opt/data/token.txt"
+    if os.path.exists(token_path):
+        with open(token_path, "r") as f:
+            token = f.read().strip()
+            if token:
+                return token
+    logging.error("Authorization code is required")
+    raise AirflowException("Authorization code is required")

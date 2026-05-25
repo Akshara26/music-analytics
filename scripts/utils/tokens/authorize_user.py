@@ -1,68 +1,47 @@
+import os
+import requests
+import base64
 import logging
-import time
-
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-
-from airflow.decorators import task
 from airflow.exceptions import AirflowException
-from config.appconfig import app_config
-from scripts.utils.automation.login_handler import handle_login
-from scripts.utils.automation.recaptcha_handler import handle_recaptcha
-from scripts.utils.automation.web_driver import get_webdriver
+from airflow.decorators import task
 
+logger = logging.getLogger(__name__)
 
 @task
-def authorize_user() -> str:
-    """_summary_
-    Verifies user to generate authorization code
-    Returns:
-        str: spotify authorization code
-    """
-    try:
-        logging.info("Authorizing user.........")
-        SPOTIFY_CLIENT_ID = app_config.get_spotify_client_id()
-        SPOTIFY_REDIRECT_URI = app_config.get_spotify_redirect_uri()
-        scope = "user-read-recently-played"
+def authorize_user():
+    logger.info("Authorizing user via OAuth refresh token...")
 
-        driver = get_webdriver()
-        auth_url = f"https://accounts.spotify.com/authorize?client_id={SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri={SPOTIFY_REDIRECT_URI}&scope={scope}"
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+    refresh_token = os.environ.get("SPOTIFY_REFRESH_TOKEN")
 
-        handle_login(driver, auth_url)
+    if not all([client_id, client_secret, refresh_token]):
+        raise AirflowException("Missing SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, or SPOTIFY_REFRESH_TOKEN")
 
-        if "recaptcha" in driver.current_url:
-            logging.info("Solving recaptcha........")
-            handle_recaptcha(driver)
+    credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
-        print("........................", driver.current_url)
-        current_url = driver.current_url
+    response = requests.post(
+        "https://accounts.spotify.com/api/token",
+        headers={
+            "Authorization": f"Basic {credentials}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token
+        }
+    )
 
-        authorization_code = None
+    if response.status_code != 200:
+        raise AirflowException(f"Failed to get access token: {response.text}")
 
-        while not authorization_code:
-            current_url = driver.current_url
+    access_token = response.json()["access_token"]
 
-            if "code=" in current_url:
-                authorization_code = current_url.split("code=")[1]
-                print(f"Authorization code found: {authorization_code}")
-            else:
-                print("sleeping")
-                time.sleep(2)
-                continue
+    # Save token to file where the rest of the pipeline expects it
+    token_path = "/opt/data/token.txt"
+    os.makedirs(os.path.dirname(token_path), exist_ok=True)
+    with open(token_path, "w") as f:
+        f.write(access_token)
 
-        # Close the browser
-        driver.quit()
-        logging.info("Authorizing code extracted......")
-
-        print(authorization_code)
-
-        with open("/opt/.env", "a") as env_file:
-            env_file.write(f"SPOTIFY_AUTHORIZATION_CODE={authorization_code}\n")
-
-        print(f"Your authorization code: {authorization_code}")
-
-        return authorization_code
-
-    except Exception as e:
-        logging.error(f"Error in authentication process: {e}")
-        raise AirflowException(f"Error in authentication process: {e}")
+    logger.info("Access token successfully obtained and saved.")
+    return access_token
