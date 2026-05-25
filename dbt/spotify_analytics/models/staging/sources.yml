@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: public
+    database: spotify
+    schema: public
+    tables:
+      - name: dim_song
+      - name: dim_artist
+      - name: dim_date
+      - name: fact_song_stream

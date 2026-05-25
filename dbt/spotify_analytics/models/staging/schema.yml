@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: stg_streams
+    description: "Cleaned fact table of song streams"
+    columns:
+      - name: song_stream_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: play_count
+        description: "Number of plays"
+        tests:
+          - not_null
+      - name: total_duration
+        description: "Total duration in ms"
+        tests:
+          - not_null
+
+  - name: stg_artists
+    description: "Cleaned artist dimension"
+    columns:
+      - name: artist_id
+        tests:
+          - unique
+          - not_null
+      - name: artist_name
+        tests:
+          - not_null
+
+  - name: stg_songs
+    description: "Cleaned song dimension"
+    columns:
+      - name: song_id
+        tests:
+          - unique
+          - not_null
+      - name: song_title
+        tests:
+          - not_null

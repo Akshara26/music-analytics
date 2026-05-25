@@ -5,7 +5,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     client_id="c1d8196c3b484e19be269e9c586a056f",
     client_secret="df44612fbead4ce18867ca02b06f364c",
     redirect_uri="http://127.0.0.1:8888/callback",
-    scope="user-top-read user-read-private"
+    scope="user-top-read user-read-private user-read-recently-played"
 ))
 
 token_info = sp.auth_manager.get_cached_token()

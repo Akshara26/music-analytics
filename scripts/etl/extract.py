@@ -1,3 +1,4 @@
+import datetime
 import logging
 import pandas as pd
 from airflow.decorators import task
@@ -7,37 +8,40 @@ from scripts.utils.tokens.generate_spotify_client import generate_spotify_client
 
 
 def extract_single_track_data(track_item):
-    """Extract relevant data for a single top track."""
-    artists = track_item.get("artists", [{}])
+    """Extract relevant data for a single recently played track."""
+    track = track_item["track"]
+    artists = track.get("artists", [{}])
     return {
-        "song_title": track_item.get("name", "N/A"),
+        "song_title": track.get("name", "N/A"),
         "artist_name": artists[0].get("name", "N/A") if artists else "N/A",
-        "played_at": pd.Timestamp.now().isoformat(),
-        "song_duration_ms": track_item.get("duration_ms", 0),
+        "played_at": track_item.get("played_at", "N/A"),
+        "song_duration_ms": track.get("duration_ms", 0),
         "artist_natural_key": artists[0].get("id") if artists else None,
-        "song_natural_key": track_item.get("id"),
-        "popularity": track_item.get("popularity", 0),
-        "time_range": "medium_term",
+        "song_natural_key": track.get("id"),
     }
 
 
 @task
 def extract_spotify_recently_played() -> pd.DataFrame:
     """
-    Fetch user's top tracks from Spotify (free tier compatible).
-    Extracts top 50 tracks over medium_term (last ~6 months).
+    Fetch recently played songs from Spotify API.
+    Extracts last 50 tracks played in the past 24 hours.
     """
     try:
         spotify_client = generate_spotify_client()
 
-        logging.info("Extracting Spotify top tracks data........")
-        top_tracks = spotify_client.current_user_top_tracks(
-            limit=50, time_range="medium_term"
+        today = datetime.datetime.now()
+        yesterday = today - datetime.timedelta(days=1)
+        yesterday_unix_ms = int(yesterday.timestamp()) * 1000
+
+        logging.info("Extracting Spotify recently played data........")
+        recently_played = spotify_client.current_user_recently_played(
+            limit=50, after=yesterday_unix_ms
         )
 
         track_data = [
             extract_single_track_data(item)
-            for item in top_tracks["items"]
+            for item in recently_played["items"]
         ]
 
         df_columns = [
@@ -47,12 +51,10 @@ def extract_spotify_recently_played() -> pd.DataFrame:
             "song_duration_ms",
             "artist_natural_key",
             "song_natural_key",
-            "popularity",
-            "time_range",
         ]
         df = pd.DataFrame(track_data, columns=df_columns)
 
-        logging.info(f"Extracted {len(df)} top tracks successfully.")
+        logging.info(f"Extracted {len(df)} recently played tracks successfully.")
         return df
 
     except Exception as e:
