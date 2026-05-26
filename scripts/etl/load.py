@@ -124,5 +124,5 @@ def load():
         conn.close()
 
     except Exception as e:
-        logging.error("Loading error: ", e)
-        raise AirflowException("Loading error: ", e)
+        logging.error(f"Loading error: {e}")
+        raise AirflowException(f"Loading error: {e}")
