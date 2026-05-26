@@ -1,113 +1,117 @@
-# Spotify ETL Pipeline
+# Music Analytics Pipeline
 
-Apache Airflow-driven Spotify Data Pipeline that drives data extraction and transformation, to uncover insights into user behavior and stream trends within the Spotify.
+A production-style ETL data pipeline that extracts personal Spotify listening data, transforms it using dbt, and visualizes insights in Metabase.
 
-<p align="center">
-    <img src="https://img.shields.io/badge/Spotify-1ED760?style=for-the-badge&logo=spotify&logoColor=white" alt="Spotify">
-    <img src="https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54" alt="Python">
-    <img src="https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white" alt="Pandas">
-    <img src="https://img.shields.io/badge/Apache%20Airflow-017CEE?style=for-the-badge&logo=Apache%20Airflow&logoColor=white" alt="Apache Airflow">
-    <img src="https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
-    <img src="https://img.shields.io/badge/-selenium-%43B02A?style=for-the-badge&logo=selenium&logoColor=white" alt="Selenium">
-    <!-- <img src="https://a11ybadges.com/badge?logo=metabase" alt="metabase"> -->
-    <img src="https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white" alt="githubactions">
-</p>
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![Apache Airflow](https://img.shields.io/badge/Apache%20Airflow-017CEE?style=for-the-badge&logo=Apache%20Airflow&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
+![dbt](https://img.shields.io/badge/dbt-FF694B?style=for-the-badge&logo=dbt&logoColor=white)
 
-## Features
+## Architecture
 
-- **Spotify API Integration** : Retrieves user's _recently played songs_ data from the Spotify API.
-- **Automate Login** : Automates Spotify login and token retrieval with Selenium.
-- **Data Cleaning** : Clean and prepare data according to schema.
-- **Optimized for Analysis** : Stores refined data into a well-organized star schema for optimized querying.
-- **Scheduled Batch Processing** : Utilizes airflow to orchestrate pipeline and schedule for every midnight.
+![Architecture](assets/architecture.png)
 
-## Analysis Metrics
+## Pipeline Overview
 
-- **KPI** : The key focus is to analyze user's listening trends, particularly emphasizing hourly activity, and to evaluate artist popularity based on play counts.
-- **Granularity** : The grain for this project is user-specific song play durations tracked hourly, emphasizing individual days within weekly cycles of the month.
+The pipeline runs daily via Apache Airflow and consists of the following tasks:
 
-## Batch Processing Architecture
+1. **authorize_user** — Fetches a fresh Spotify access token via OAuth refresh token flow
+2. **create_star_schema_table** — Ensures the PostgreSQL star schema tables exist
+3. **extract_spotify_recently_played** — Pulls the last 50 recently played tracks from the Spotify API
+4. **save_to_staging_csv** — Saves raw data to a staging CSV layer
+5. **transform** — Cleans and prepares data for loading
+6. **save_df_to_processed_csv** — Saves processed data to CSV
+7. **load** — Loads data into PostgreSQL star schema
+8. **dbt_run** — Runs dbt models to build staging views and analytics mart tables
+9. **dbt_test** — Runs 10 data quality tests across all models
 
-Orchestrated through Apache Airflow, the data pipeline ensures consistent handling of Spotify data by executing tasks, such as extraction and transformation, at interval of every midnight.
+![Airflow DAG](assets/airflow_dag.png)
 
-![Architecture Diagram](https://raw.githubusercontent.com/rnimisha/spotify-data-pipeline/main/assets/architecturaldiagram.jpeg)
+## Data Model
 
-## OLAP Data Modeling
+Star schema with the following tables:
 
-Star schema model to increase efficiency for Analysis.
-![Star Schema](https://raw.githubusercontent.com/rnimisha/spotify-data-pipeline/main/assets/star_schema.png)
+- `fact_song_stream` — play count and duration per song per date
+- `dim_song` — song metadata
+- `dim_artist` — artist metadata  
+- `dim_date` — date/time dimensions
 
-## Workflow Overview
+![Star Schema](assets/star_schema.png)
 
-Here is a visual representation of the Airflow DAG Tasks:
+## dbt Models
+models/
+├── staging/
+│   ├── stg_streams.sql
+│   ├── stg_songs.sql
+│   ├── stg_artists.sql
+│   └── stg_dates.sql
+└── marts/
+├── mart_top_artists.sql
+├── mart_top_songs.sql
+└── mart_listening_patterns.sql
+10 data quality tests including uniqueness and not-null checks on all key columns.
 
-![Airflow DAG Tasks](https://raw.githubusercontent.com/rnimisha/spotify-data-pipeline/main/assets/runningtask.gif)
+## Dashboard
 
-## Analytics
+Built with Metabase connected to PostgreSQL.
 
-The database is connected with metabase to sync analytics.
+![Dashboard](assets/dashboard.png)
 
-![Spotify Dashboard](https://raw.githubusercontent.com/rnimisha/spotify-data-pipeline/main/assets/spotifydashboard.jpeg)
+## Tech Stack
 
-Clicking on the aritist will redirect to artist based dashboard.
-![Aritist Dashboard](https://raw.githubusercontent.com/rnimisha/spotify-data-pipeline/main/assets/artistdashboard.jpeg)
+| Tool | Purpose |
+|---|---|
+| Spotify API | Data source |
+| Apache Airflow | Orchestration |
+| PostgreSQL | Data warehouse |
+| dbt | Transformation & testing |
+| Metabase | Dashboarding |
+| Docker | Containerization |
 
-## Environment Variables
+## Setup
 
-To run this project, you will need to add the following environment variables to your .env file in root of the project
+### Prerequisites
+- Docker Desktop
+- Spotify Developer account (Premium for recently-played endpoint)
 
-| Name                     | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| SPOTIFY_CLIENT_ID        | Spotify client ID.                                  |
-| SPOTIFY_CLIENT_SECRET    | Spotify Client Secret.                              |
-| POSTGRES_DB              | Name of the PostgreSQL database.                    |
-| POSTGRES_USER            | Username for accessing the PostgreSQL database.     |
-| POSTGRES_PASSWORD        | Password for the PostgreSQL database.               |
-| POSTGRES_HOST            | Hostname or IP address for the PostgreSQL database. |
-| POSTGRES_PORT            | Port number for the PostgreSQL database.            |
-| AIRFLOW_UID              | User ID for the Apache Airflow service.             |
-| AIRFLOW_DB_NAME          | Name of the database used by Apache Airflow.        |
-| AIRFLOW_ADMIN_USER       | Username for the Apache Airflow admin account.      |
-| AIRFLOW_ADMIN_PASSWORD   | Password for the Apache Airflow admin account.      |
-| AIRFLOW_ADMIN_FIRSTNAME  | First name of the Apache Airflow admin user.        |
-| AIRFLOW_ADMIN_LASTNAME   | Last name of the Apache Airflow admin user.         |
-| PGADMIN_DEFAULT_EMAIL    | Email for the PGAdmin tool.                         |
-| PGADMIN_DEFAULT_PASSWORD | Password for the PGAdmin tool.                      |
-| MY_SPOTIFY_PASSWORD      | Password for the Spotify user account.              |
-| MY_SPOTIFY_USERNAME      | Username or email for the Spotify user account.     |
+### Steps
 
-## Prerequisites
-
-Before proceeding with this project, ensure you have the following:
-
-- **Git:** Version control. [Download Git](https://git-scm.com/downloads)
-- **Docker:** Containerization. [Get Docker](https://www.docker.com/products/docker-desktop)
-- **Docker Compose:** Running Multi-container Docker applications. [Install Docker Compose](https://docs.docker.com/compose/install/)
-
-## Installation
-
-1. Clone the project from the repository.
-
+1. Clone the repo:
 ```bash
-  git clone https://github.com/rnimisha/spotify-data-pipeline.git
+git clone https://github.com/Akshara26/music-analytics.git
+cd music-analytics
 ```
 
-2. Duplicate the `.env.example` file and rename it to `.env`.
-
+2. Copy and fill in environment variables:
 ```bash
-  cp .env.example .env
+cp .env.example .env
 ```
 
-3. Adjust values for environment variables
-4. Build images and run the services.
-
+3. Get a Spotify refresh token:
 ```bash
-  docker compose up -d --build
+python3 get_token.py
 ```
 
-5. Access the Airflow webserver in your localhost running at port 8080.
+4. Build and start:
+```bash
+docker compose up -d --build
+```
 
-## Future Scope
+5. Access services:
 
-- **Testing** : Implement unit testing.
-- **Storage** : Use storage like mongoDb instead of csv for staging datas.
+| Service | URL |
+|---|---|
+| Airflow | http://localhost:8080 |
+| Metabase | http://localhost:3008 |
+| PGAdmin | http://localhost:5050 |
+
+6. Trigger the DAG in Airflow and watch it run end to end.
+
+## Improvements Made Over Original
+
+- Replaced fragile Selenium auth with proper OAuth refresh token flow
+- Switched to `recently-played` endpoint with Premium account
+- Added dbt transformation layer with staging and mart models
+- Added 10 automated data quality tests
+- Fixed hardcoded credentials from original author

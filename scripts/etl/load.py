@@ -5,6 +5,7 @@ sys.path.append("/opt/scripts")
 
 import pandas as pd
 from psycopg2.extensions import connection
+from psycopg2.extras import execute_batch
 
 from airflow.decorators import task
 from airflow.exceptions import AirflowException
@@ -34,16 +35,44 @@ def load_to_star_schema(df: pd.DataFrame, conn: connection):
         cursor = conn.cursor()
         logging.info("Inserting data to star schema.........")
 
+        # upsert artists
+        execute_batch(cursor, """
+            INSERT INTO dim_artist (artist_name, artist_natural_key)
+            VALUES (%s, %s)
+            ON CONFLICT (artist_natural_key) DO NOTHING
+        """, [(row["artist_name"], row["artist_natural_key"]) for _, row in df.iterrows()])
+
+        # upsert songs
+        execute_batch(cursor, """
+            INSERT INTO dim_song (song_title, duration_ms, song_natural_key)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (song_natural_key) DO NOTHING
+        """, [(row["song_title"], int(row["song_duration_ms"]), row["song_natural_key"]) for _, row in df.iterrows()])
+
+        # upsert dates
+        execute_batch(cursor, """
+            INSERT INTO dim_date (year, month, hour_of_day, day_of_week)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (year, month, hour_of_day, day_of_week) DO NOTHING
+        """, [(int(row["year"]), int(row["month"]), int(row["hour_of_day"]), row["day_of_week"].lower()) for _, row in df.iterrows()])
+
+        # load fact table row by row (needs upsert logic)
         for _, row in df.iterrows():
-            artist_id = insert_dim_artist(cursor, row)
-            song_id = insert_dim_song(cursor, row)
-            date_id = insert_dim_date(cursor, row)
+            cursor.execute("SELECT artist_id FROM dim_artist WHERE artist_natural_key = %s", (row["artist_natural_key"],))
+            artist_id = cursor.fetchone()[0]
+            cursor.execute("SELECT song_id FROM dim_song WHERE song_natural_key = %s", (row["song_natural_key"],))
+            song_id = cursor.fetchone()[0]
+            cursor.execute("""
+                SELECT date_id FROM dim_date
+                WHERE year = %s AND month = %s AND hour_of_day = %s AND day_of_week = %s
+            """, (int(row["year"]), int(row["month"]), int(row["hour_of_day"]), row["day_of_week"].lower()))
+            date_id = cursor.fetchone()[0]
             insert_fact_song_stream(song_id, artist_id, date_id, cursor, row)
 
         logging.info("Data inserted successfully.........")
     except Exception as e:
-        logging.error("Star schema load error: ", e)
-        raise AirflowException("Star schema load error: ", e)
+        logging.error(f"Star schema load error: {e}")
+        raise AirflowException(f"Star schema load error: {e}")
 
 
 @task

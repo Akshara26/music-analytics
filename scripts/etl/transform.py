@@ -27,25 +27,9 @@ def check_empty_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def check_missing_value(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Check for missing and null value in spotify data.
-
-    Args:
-        df (pd.DataFrame): staging layer dataframe
-
-    Returns:
-        pd.DataFrame: dataframe without null value
-    """
-    # if whole row is empty null
     df = df.dropna(how="all")
-
-    # replace with unknown placeholder
-    string_columns = ["song_title", "artist_name"]
-    df[string_columns] = df[string_columns].fillna("N/A")
-
-    # if duration or timestamp is missing then whole row is dropped
     df = df.dropna(subset=["song_duration_ms", "played_at"], how="any")
-
+    df = df.dropna(subset=["song_title", "artist_name"], how="any")
     return df
 
 
@@ -89,7 +73,7 @@ def check_duration_format(duration_value) -> int:
     try:
         return int(duration_value)
     except ValueError as error:
-        raise AirflowException("Duration of song is not a valid number")
+        raise AirflowException("Duration of song is not a valid number") from error
 
 
 def transform_song(df: pd.DataFrame) -> pd.DataFrame:

@@ -36,23 +36,11 @@ def etl_spotify_data_pipeline():
     dbt_run = BashOperator(
         task_id="dbt_run",
         bash_command="cd /opt/dbt/spotify_analytics && /home/airflow/.local/bin/dbt run --profiles-dir .",
-        env={
-            "POSTGRES_HOST": "postgresdb",
-            "POSTGRES_USER": "{{ var.value.get('POSTGRES_USER', 'spotify_user') }}",
-            "POSTGRES_PASSWORD": "{{ var.value.get('POSTGRES_PASSWORD', 'spotify_pass') }}",
-            "POSTGRES_DB": "spotify",
-        }
     )
 
     dbt_test = BashOperator(
         task_id="dbt_test",
         bash_command="cd /opt/dbt/spotify_analytics && /home/airflow/.local/bin/dbt test --profiles-dir .",
-        env={
-            "POSTGRES_HOST": "postgresdb",
-            "POSTGRES_USER": "{{ var.value.get('POSTGRES_USER', 'spotify_user') }}",
-            "POSTGRES_PASSWORD": "{{ var.value.get('POSTGRES_PASSWORD', 'spotify_pass') }}",
-            "POSTGRES_DB": "spotify",
-        }
     )
 
     (
