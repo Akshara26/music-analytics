@@ -1,9 +1,8 @@
 import sys
 from datetime import datetime, timedelta
-
 sys.path.append("/opt")
-
-from airflow.decorators import dag
+from airflow.decorators import dag, task
+from airflow.operators.bash import BashOperator
 from scripts.database.create_table import create_star_schema_table
 from scripts.etl.extract import extract_spotify_recently_played, save_to_staging_csv
 from scripts.etl.load import load
@@ -11,12 +10,11 @@ from scripts.etl.transform import save_df_to_processed_csv, transform
 from scripts.utils.tokens.authorize_user import authorize_user
 
 default_args = {
-    "owner": "nayeon",
+    "owner": "akshara",
     "depends_on_past": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
-
 
 @dag(
     schedule_interval="0 0 * * *",
@@ -28,14 +26,34 @@ default_args = {
 )
 def etl_spotify_data_pipeline():
     create_table_task = create_star_schema_table()
-
     authorize_user_task = authorize_user()
-
     extract_task = extract_spotify_recently_played()
     save_to_staging_task = save_to_staging_csv(extract_task)
     transform_task = transform("staging_played_tracks.csv")
     save_to_processed_task = save_df_to_processed_csv(transform_task)
     load_task = load()
+
+    dbt_run = BashOperator(
+        task_id="dbt_run",
+        bash_command="cd /opt/dbt/spotify_analytics && /home/airflow/.local/bin/dbt run --profiles-dir .",
+        env={
+            "POSTGRES_HOST": "postgresdb",
+            "POSTGRES_USER": "{{ var.value.get('POSTGRES_USER', 'spotify_user') }}",
+            "POSTGRES_PASSWORD": "{{ var.value.get('POSTGRES_PASSWORD', 'spotify_pass') }}",
+            "POSTGRES_DB": "spotify",
+        }
+    )
+
+    dbt_test = BashOperator(
+        task_id="dbt_test",
+        bash_command="cd /opt/dbt/spotify_analytics && /home/airflow/.local/bin/dbt test --profiles-dir .",
+        env={
+            "POSTGRES_HOST": "postgresdb",
+            "POSTGRES_USER": "{{ var.value.get('POSTGRES_USER', 'spotify_user') }}",
+            "POSTGRES_PASSWORD": "{{ var.value.get('POSTGRES_PASSWORD', 'spotify_pass') }}",
+            "POSTGRES_DB": "spotify",
+        }
+    )
 
     (
         [authorize_user_task, create_table_task]
@@ -44,7 +62,8 @@ def etl_spotify_data_pipeline():
         >> transform_task
         >> save_to_processed_task
         >> load_task
+        >> dbt_run
+        >> dbt_test
     )
-
 
 etl_spotify_data_pipeline_dag = etl_spotify_data_pipeline()
