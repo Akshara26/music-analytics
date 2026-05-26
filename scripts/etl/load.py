@@ -1,7 +1,4 @@
 import logging
-import sys
-
-sys.path.append("/opt/scripts")
 
 import pandas as pd
 from psycopg2.extensions import connection

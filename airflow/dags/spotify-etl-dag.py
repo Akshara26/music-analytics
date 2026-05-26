@@ -1,6 +1,4 @@
-import sys
 from datetime import datetime, timedelta
-sys.path.append("/opt")
 from airflow.decorators import dag, task
 from airflow.operators.bash import BashOperator
 from scripts.database.create_table import create_star_schema_table
